@@ -2,7 +2,7 @@ name: Auto-generate Blog Post
 
 on:
   schedule:
-    - cron: "0 2 * * 1"   # Monday 9AM Bangkok
+    - cron: "0 2 * * 1"   # Monday 9AM Bangkok (2AM UTC)
   workflow_dispatch:
     inputs:
       topic:
@@ -26,11 +26,12 @@ jobs:
         python-version: '3.11'
 
     - name: Install dependencies
-      run: pip install openai
+      run: pip install openai jq
 
     - name: Generate article with OpenAI
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        INPUT_TOPIC: ${{ github.event.inputs.topic }}
       run: |
         mkdir -p posts
         TODAY=$(date +'%Y-%m-%d')
@@ -41,31 +42,33 @@ import os, openai, datetime, json
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 today = datetime.date.today().strftime("%A, %B %d, %Y")
-
 topic = os.getenv("INPUT_TOPIC", "trending AI topic")
+
+# Title + Summary
 meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for a {topic} as of {today}. Respond in JSON with keys: title, summary."
-meta_resp = openai.chat.completions.create(
+resp = openai.chat.completions.create(
     model="gpt-4o-mini",
     messages=[{"role": "user", "content": meta_prompt}],
-    max_tokens=150,
+    max_tokens=200,
 )
-
 try:
-    meta = json.loads(meta_resp.choices[0].message.content.strip())
-except Exception as e:
+    meta = json.loads(resp.choices[0].message.content.strip())
+except:
     meta = {"title": f"Weekly Blog Post - {today}", "summary": "Auto-generated article."}
 
-title = meta.get("title", f"Weekly Blog Post - {today}")
-summary = meta.get("summary", "Auto-generated article.")
+title = meta["title"]
+summary = meta["summary"]
 
-article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include useful insights and structure it with H2 subheadings."
-article_resp = openai.chat.completions.create(
+# Full Article
+article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
+resp2 = openai.chat.completions.create(
     model="gpt-4o-mini",
     messages=[{"role": "user", "content": article_prompt}],
-    max_tokens=1000,
+    max_tokens=1200,
 )
-article_text = article_resp.choices[0].message.content
+article_text = resp2.choices[0].message.content
 
+# Save HTML file
 html = f"""<!DOCTYPE html>
 <html>
 <head><title>{title}</title></head>
@@ -75,8 +78,35 @@ html = f"""<!DOCTYPE html>
 <div>{article_text}</div>
 </body></html>"""
 
+os.makedirs("posts", exist_ok=True)
 with open(f"posts/article-{today}.html", "w") as f:
     f.write(html)
 
-# Save metadata for bash
-with open
+# Save metadata for BASH
+with open("post_meta.json", "w") as f:
+    json.dump({"title": title, "summary": summary}, f)
+PYCODE
+
+        TITLE=$(jq -r .title post_meta.json)
+        SUMMARY=$(jq -r .summary post_meta.json)
+
+        # Ensure posts.json exists & is valid
+        if [ ! -f posts.json ]; then
+          echo "[]" > posts.json
+        fi
+
+        echo "Adding entry: $TITLE"
+
+        tmp=$(mktemp)
+        jq ". + [{\"title\": \"$TITLE\", \"file\": \"posts/article-${TODAY}.html\", \"date\": \"${TODAY}\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
+
+    - name: Debug: show posts.json
+      run: cat posts.json
+
+    - name: Commit and push changes
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add posts/ posts.json
+        git commit -m "Auto-generated blog post $(date +'%Y-%m-%d')" || echo "No changes"
+        git push origin main
