@@ -12,8 +12,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Run deployment steps
         run: |
-          echo "Creating markdown post in /posts/"
+          echo "Creating markdown post in /posts/test-post.md"
+          echo "# Test Post 🚀" > posts/test-post.md
+          echo "" >> posts/test-post.md
+          echo "This is a dummy post created by GitHub Actions." >> posts/test-post.md
+
           echo "Updating posts.json with new post info"
-          echo "Committing changes and triggering Netlify redeploy"
+          # Append entry safely to posts.json (you may want a JSON-safe update script here)
+          tmpfile=$(mktemp)
+          jq '. += [{"title":"Test Post 🚀","slug":"test-post","date":"2025-08-17","summary":"Created by GitHub Actions"}]' posts.json > "$tmpfile"
+          mv "$tmpfile" posts.json
+
+      - name: Commit changes
+        run: |
+          git add posts/test-post.md posts.json
+          git commit -m "Add test post via GitHub Actions" || echo "No changes to commit"
+
+      - name: Push changes
+        run: git push
