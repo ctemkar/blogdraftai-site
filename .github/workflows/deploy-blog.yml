@@ -5,12 +5,17 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          persist-credentials: true
 
       - name: Set up Git
         run: |
@@ -25,7 +30,9 @@ jobs:
           echo "This is a dummy post created by GitHub Actions." >> posts/test-post.md
 
           echo "Updating posts.json with new post info"
-          # Append entry safely to posts.json (you may want a JSON-safe update script here)
+          if [ ! -f posts.json ]; then
+            echo "[]" > posts.json
+          fi
           tmpfile=$(mktemp)
           jq '. += [{"title":"Test Post 🚀","slug":"test-post","date":"2025-08-17","summary":"Created by GitHub Actions"}]' posts.json > "$tmpfile"
           mv "$tmpfile" posts.json
@@ -37,3 +44,5 @@ jobs:
 
       - name: Push changes
         run: git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
