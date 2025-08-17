@@ -1,0 +1,82 @@
+name: Weekly Blog Generator
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # every Monday at 9:00 UTC
+  workflow_dispatch:       # allows manual trigger
+
+jobs:
+  generate-blog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Generate blog post and update posts.json
+        run: |
+          mkdir -p posts
+          
+          # Create the new blog post
+          DATE=$(date +'%Y-%m-%d')
+          TITLE="Weekly Blog Post - $(date +'%B %d, %Y')"
+          FILE="posts/post-$DATE.md"
+          
+          echo "# $TITLE" > $FILE
+          echo "" >> $FILE
+          echo "This is an auto‑generated blog draft for BlogDraftAI.com." >> $FILE
+          echo "" >> $FILE
+          echo "## What's New This Week" >> $FILE
+          echo "" >> $FILE
+          echo "- Fresh AI-generated content ideas" >> $FILE
+          echo "- Updated blog templates" >> $FILE
+          echo "- SEO optimization tips" >> $FILE
+          echo "" >> $FILE
+          echo "Stay tuned for more automated content!" >> $FILE
+          
+          # Update or create posts.json
+          python3 << 'EOF'
+          import json
+          import os
+          from datetime import datetime
+          
+          # Load existing posts.json or create empty list
+          posts_file = 'posts.json'
+          if os.path.exists(posts_file):
+              with open(posts_file, 'r') as f:
+                  posts = json.load(f)
+          else:
+              posts = []
+          
+          # Add new post
+          date_str = datetime.now().strftime('%Y-%m-%d')
+          title = f"Weekly Blog Post - {datetime.now().strftime('%B %d, %Y')}"
+          new_post = {
+              "file": f"posts/post-{date_str}.md",
+              "title": title,
+              "date": date_str
+          }
+          
+          # Check if post already exists (avoid duplicates)
+          if not any(post['file'] == new_post['file'] for post in posts):
+              posts.append(new_post)
+          
+          # Save updated posts.json
+          with open(posts_file, 'w') as f:
+              json.dump(posts, f, indent=2)
+          
+          print(f"Added post: {title}")
+          EOF
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add posts/ posts.json
+          git commit -m "📝 Add weekly blog post: $(date +'%Y-%m-%d')" || echo "No changes"
+          git push
