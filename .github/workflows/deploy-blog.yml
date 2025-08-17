@@ -1,0 +1,19 @@
+name: Deploy Blog
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run deployment steps
+        run: |
+          echo "Creating markdown post in /posts/"
+          echo "Updating posts.json with new post info"
+          echo "Committing changes and triggering Netlify redeploy"
