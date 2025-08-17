@@ -68,7 +68,7 @@ jobs:
             meta = json.loads(raw)
         except Exception as e:
             print("Error generating meta:", e)
-            meta = {"title": f"Weekly Blog Post - {today}", "summary": "Auto-generated article."}
+            meta = {"title": f"Weekly Blog Post - {today}", "summary": "Fallback summary because JSON parse failed."}
 
         title = meta.get("title", f"Weekly Blog Post - {today}")
         summary = meta.get("summary", "Auto-generated article.")
@@ -123,7 +123,8 @@ jobs:
         cat posts.json
 
         tmp=$(mktemp)
-        jq ". + [{\"title\": \"$TITLE\", \"file\": \"$POST_FILE\", \"date\": \"$TODAY\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
+        # Replace today's entry if it exists, then add new one
+        jq "map(select(.date != \"${TODAY}\")) + [{\"title\": \"$TITLE\", \"file\": \"$POST_FILE\", \"date\": \"$TODAY\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
 
         echo "After update:"
         cat posts.json
