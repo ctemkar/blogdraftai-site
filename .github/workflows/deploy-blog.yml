@@ -8,104 +8,32 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-          
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-        
-    - name: Run tests
-      run: |
-        pytest tests/ --cov=src/ --cov-report=xml
-        
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-
   build:
-    needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
       with:
-        python-version: '3.11'
-        
+        node-version: '18'
+
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
-    - name: Build application
-      run: |
-        # Add any build steps here
-        echo "Building BlogDraftAI application..."
-        
-    - name: Create deployment package
-      run: |
-        mkdir -p deploy
-        cp -r src/ deploy/
-        cp requirements.txt deploy/
-        cp -r templates/ deploy/ 2>/dev/null || true
-        cp -r static/ deploy/ 2>/dev/null || true
-        
-    - name: Upload build artifacts
+      run: npm install
+
+    - name: Run tests
+      run: npm test
+
+    - name: Build project
+      run: npm run build
+
+    - name: Upload production-ready build
       uses: actions/upload-artifact@v3
       with:
         name: blogdraftai-build
-        path: deploy/
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment: production
-    
-    steps:
-    - name: Download build artifacts
-      uses: actions/download-artifact@v3
-      with:
-        name: blogdraftai-build
-        path: deploy/
-        
-    - name: Deploy to production
-      run: |
-        echo "Deploying BlogDraftAI to production..."
-        # Add your deployment commands here
-        # Examples:
-        # - Deploy to AWS, GCP, Azure
-        # - Deploy to Heroku
-        # - Deploy to VPS via SSH
-        # - Deploy to Docker registry
-        
-    - name: Health check
-      run: |
-        echo "Running health check..."
-        # Add health check commands here
-        # curl -f $PRODUCTION_URL/health || exit 1
+        path: |
+          build/
+          dist/
+          out/
