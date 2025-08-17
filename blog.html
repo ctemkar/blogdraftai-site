@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlogDraftAI - Our Blog</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+      background-color: #f9f9f9;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .post {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .post h2 {
+      margin: 0 0 10px 0;
+    }
+    .post h2 a {
+      text-decoration: none;
+      color: #333;
+    }
+    .post h2 a:hover {
+      color: #007bff;
+    }
+    .post-date {
+      color: #666;
+      font-size: 0.9em;
+      margin-bottom: 10px;
+    }
+    .post-summary {
+      margin: 0;
+      color: #555;
+    }
+    .no-posts {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>BlogDraftAI Blog</h1>
+    <p>Insights and trends in AI-powered content creation.</p>
+  </div>
+  
+  <div id="posts">Loading posts...</div>
+
+  <script>
+    const postsDiv = document.getElementById('posts');
+
+    fetch('posts.json')
+      .then(response => response.json())
+      .then(posts => {
+        if (posts.length === 0) {
+          postsDiv.innerHTML = '<div class="no-posts">No posts available yet.</div>';
+          return;
+        }
+
+        // Sort posts by date (newest first)
+        posts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        postsDiv.innerHTML = '';
+
+        posts.forEach(post => {
+          const div = document.createElement('div');
+          div.className = 'post';
+          div.innerHTML = `
+            <h2><a href="${post.file}">${post.title}</a></h2>
+            <div class="post-date">${post.date}</div>
+            <p class="post-summary">${post.summary}</p>
+          `;
+          postsDiv.appendChild(div);
+        });
+      })
+      .catch(err => {
+        console.error('Error loading posts:', err);
+        postsDiv.innerHTML = '<div class="no-posts">Error loading posts.json</div>';
+      });
+  </script>
+</body>
+</html>
