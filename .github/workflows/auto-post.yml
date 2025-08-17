@@ -1,29 +1,4 @@
-name: Auto-generate Blog Post
-
-on:
-  schedule:
-    - cron: "0 2 * * 1"   # every Monday at 09:00 Bangkok (2AM UTC)
-  workflow_dispatch:
-
-jobs:
-  auto-post:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: pip install openai jq
-
-    - name: Generate article with OpenAI
+- name: Generate article with OpenAI
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: |
@@ -37,7 +12,6 @@ openai.api_key = os.environ["OPENAI_API_KEY"]
 
 today = datetime.date.today().strftime("%A, %B %d, %Y")
 
-# Step 1 – generate title & summary
 meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for a trending AI topic as of {today}. Respond in JSON with keys: title, summary."
 meta_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
@@ -49,7 +23,6 @@ meta = json.loads(meta_resp.choices[0].message.content.strip())
 title = meta.get("title", f"Weekly Blog Post - {today}")
 summary = meta.get("summary", "Auto-generated article about AI.")
 
-# Step 2 – generate full article
 article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include useful insights and structure it with H2 subheadings."
 article_resp = openai.chat.completions.create(
     model="gpt-4o-mini",
@@ -58,7 +31,32 @@ article_resp = openai.chat.completions.create(
 )
 article_text = article_resp.choices[0].message.content
 
-# Save HTML
 html = f"""<!DOCTYPE html>
 <html>
 <head><title>{title}</title></head>
+<body>
+<h1>{title}</h1>
+<p><em>{summary}</em></p>
+<div>{article_text}</div>
+</body></html>"""
+
+# Write article
+with open(f"posts/article-{today}.html", "w") as f:
+    f.write(html)
+
+# Prepare meta.json
+with open("post_meta.json", "w") as f:
+    json.dump({"title": title, "summary": summary}, f)
+PYCODE
+
+        TITLE=$(jq -r .title post_meta.json)
+        SUMMARY=$(jq -r .summary post_meta.json)
+
+        # Ensure posts.json always exists
+        if [ ! -f posts.json ]; then
+          echo "[]" > posts.json
+        fi
+
+        # Append new post
+        jq ". + [{\"title\": \"$TITLE\", \"file\": \"posts/article-${TODAY}.html\", \"date\": \"${TODAY}\", \"summary\": \"$SUMMARY\"}]" posts.json > posts_tmp.json
+        mv posts_tmp.json posts.json
