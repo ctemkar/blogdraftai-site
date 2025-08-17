@@ -17,6 +17,10 @@
     ul { list-style: "✔ "; margin-left: 20px; }
     blockquote { border-left: 4px solid #0070f3; padding-left: 10px; margin: 20px 0; font-style: italic; color: #555; }
     footer { text-align: center; font-size: 0.9em; background: #f5f5f5; padding: 20px; }
+    #posts-list { list-style: none; padding: 0; }
+    #posts-list li { margin: 10px 0; }
+    #posts-list a { color: #0070f3; text-decoration: none; }
+    #posts-list a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -80,6 +84,28 @@
   <p><strong>Who is this for?</strong><br>Solo bloggers, content creators, and entrepreneurs who want to publish consistently.</p>
   <p><strong>Who is this not for?</strong><br>Agencies that need large‑scale editorial systems.</p>
 </section>
+
+<section id="latest-posts">
+  <h2>Latest Posts</h2>
+  <ul id="posts-list"></ul>
+</section>
+
+<script>
+  fetch("posts.json")
+    .then(res => res.json())
+    .then(posts => {
+      const list = document.getElementById("posts-list");
+      posts.slice(-5).reverse().forEach(post => {
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = "/posts/" + post.slug + ".html"; // adjust if your posts are .md or routed
+        link.textContent = `${post.title} (${post.date})`;
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+    })
+    .catch(err => console.error("Failed to load posts.json", err));
+</script>
 
 <footer>
   <p>© 2025 BlogDraftAI • Contact • Social • Terms</p>
