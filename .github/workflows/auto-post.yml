@@ -65,7 +65,7 @@ jobs:
         title = meta.get("title")
         summary = meta.get("summary")
 
-        article_prompt = f"Write a 600-word blog article titled '{title}' for {today_display}. Include H2 subheadings."
+        article_prompt = f"Write a 600-word blog article titled '{title}' for {today_display}. Use proper HTML formatting with <h2> tags for subheadings, <p> tags for paragraphs. Do not include <html>, <head>, or <body> tags - just the content."
         try:
             resp2 = openai.chat.completions.create(
                 model="gpt-4o-mini",
@@ -80,7 +80,15 @@ jobs:
 
         html = f"""<!DOCTYPE html>
         <html>
-        <head><title>{title}</title></head>
+        <head>
+            <title>{title}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
+                h1 {{ color: #333; }}
+                h2 {{ color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
+                p {{ line-height: 1.6; }}
+            </style>
+        </head>
         <body>
         <h1>{title}</h1>
         <p><em>{summary}</em></p>
