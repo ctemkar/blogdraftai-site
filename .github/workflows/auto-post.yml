@@ -30,6 +30,66 @@ jobs:
     - name: Install dependencies
       run: pip install openai jq
 
+    - name: Create Python script
+      run: |
+        cat > generate_post.py << 'EOF'
+        import os, openai, datetime, json
+
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            print("ERROR: No OpenAI API key found.")
+            exit(1)
+
+        openai.api_key = api_key
+        today = datetime.date.today().strftime("%A, %B %d, %Y")
+        topic = os.getenv("INPUT_TOPIC", "trending AI topic")
+
+        meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for {topic} as of {today}. Respond in JSON with keys: title, summary."
+        try:
+            resp = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": meta_prompt}],
+                max_tokens=200,
+                response_format={"type": "json_object"}
+            )
+            raw = resp.choices[0].message.content.strip()
+            meta = json.loads(raw)
+        except Exception as e:
+            print("Meta generation failed:", e)
+            meta = {"title": f"Weekly Blog Post - {today}", "summary": "Fallback summary."}
+
+        title = meta.get("title")
+        summary = meta.get("summary")
+
+        article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
+        try:
+            resp2 = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": article_prompt}],
+                max_tokens=1000,
+            )
+            article_text = resp2.choices[0].message.content
+        except Exception as e:
+            print("Article generation failed:", e)
+            article_text = "<p>Fallback: No article generated.</p>"
+
+        html = f"""<!DOCTYPE html>
+        <html>
+        <head><title>{title}</title></head>
+        <body>
+        <h1>{title}</h1>
+        <p><em>{summary}</em></p>
+        <div>{article_text}</div>
+        </body></html>"""
+
+        os.makedirs("posts", exist_ok=True)
+        with open(f"posts/post-{today}.html", "w") as f:
+            f.write(html)
+
+        with open("post_meta.json", "w") as f:
+            json.dump({"title": title, "summary": summary}, f)
+        EOF
+
     - name: Generate blog post and update posts.json
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -40,65 +100,7 @@ jobs:
         TODAY=$(date +'%Y-%m-%d')
         POST_FILE="posts/post-${TODAY}.html"
 
-        python - <<PYCODE
-import os, openai, datetime, json
-
-api_key = os.environ.get("OPENAI_API_KEY")
-if not api_key:
-    print("ERROR: No OpenAI API key found.")
-    exit(1)
-
-openai.api_key = api_key
-today = datetime.date.today().strftime("%A, %B %d, %Y")
-topic = os.getenv("INPUT_TOPIC", "trending AI topic")
-
-# Step 1: Title + summary with guaranteed JSON
-meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for {topic} as of {today}. Respond in JSON with keys: title, summary."
-try:
-    resp = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": meta_prompt}],
-        max_tokens=200,
-        response_format={"type": "json_object"}
-    )
-    raw = resp.choices[0].message.content.strip()
-    meta = json.loads(raw)
-except Exception as e:
-    print("Meta generation failed:", e)
-    meta = {"title": f"Weekly Blog Post - {today}", "summary": "Fallback summary."}
-
-title = meta.get("title")
-summary = meta.get("summary")
-
-# Step 2: Generate article
-article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
-try:
-    resp2 = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": article_prompt}],
-        max_tokens=1000,
-    )
-    article_text = resp2.choices[0].message.content
-except Exception as e:
-    print("Article generation failed:", e)
-    article_text = "<p>Fallback: No article generated.</p>"
-
-# Save HTML
-html = f"""<!DOCTYPE html>
-<html>
-<head><title>{title}</title></head>
-<body>
-<h1>{title}</h1>
-<p><em>{summary}</em></p>
-<div>{article_text}</div>
-</body></html>"""
-
-with open(f"posts/post-{today}.html", "w") as f:
-    f.write(html)
-
-with open("post_meta.json", "w") as f:
-    json.dump({"title": title, "summary": summary}, f)
-PYCODE
+        python generate_post.py
 
         TITLE=$(jq -r .title post_meta.json)
         SUMMARY=$(jq -r .summary post_meta.json)
