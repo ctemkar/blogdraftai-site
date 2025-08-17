@@ -1,4 +1,4 @@
-name: Deploy BlogDraftAI
+name: Deploy BlogDraftAI (static)
 
 on:
   push:
@@ -8,32 +8,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-
-    - name: Install dependencies
-      run: npm install
-
-    - name: Run tests
-      run: npm test
-
-    - name: Build project
-      run: npm run build
-
-    - name: Upload production-ready build
+    - name: Upload static site as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: blogdraftai-build
+        name: blogdraftai-site
         path: |
-          build/
-          dist/
-          out/
+          index.html
+          posts.json
+          posts/
