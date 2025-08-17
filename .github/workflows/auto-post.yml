@@ -55,84 +55,16 @@ jobs:
         today = datetime.date.today().strftime("%A, %B %d, %Y")
         topic = os.getenv("INPUT_TOPIC", "trending AI topic")
 
-        # Step 1: Generate title + summary
+        # Step 1: Generate title + summary with guaranteed JSON
         meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for {topic} as of {today}. Respond in JSON with keys: title, summary."
         try:
             resp = openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": meta_prompt}],
                 max_tokens=200,
+                response_format={"type": "json_object"}
             )
             raw = resp.choices[0].message.content.strip()
             print("Raw meta response:", raw)
             meta = json.loads(raw)
         except Exception as e:
-            print("Error generating meta:", e)
-            meta = {"title": f"Weekly Blog Post - {today}", "summary": "Fallback summary because JSON parse failed."}
-
-        title = meta.get("title", f"Weekly Blog Post - {today}")
-        summary = meta.get("summary", "Auto-generated article.")
-
-        print("Title:", title)
-        print("Summary:", summary)
-
-        # Step 2: Generate article
-        article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
-        try:
-            resp2 = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": article_prompt}],
-                max_tokens=1000,
-            )
-            article_text = resp2.choices[0].message.content
-            print("Generated article length:", len(article_text))
-        except Exception as e:
-            print("Error generating article:", e)
-            article_text = "<p>Fallback: No article generated.</p>"
-
-        # Save as HTML file
-        html = f"""<!DOCTYPE html>
-        <html>
-        <head><title>{title}</title></head>
-        <body>
-        <h1>{title}</h1>
-        <p><em>{summary}</em></p>
-        <div>{article_text}</div>
-        </body></html>"""
-
-        os.makedirs("posts", exist_ok=True)
-        filename = f"posts/post-{today}.html"
-        with open(filename, "w") as f:
-            f.write(html)
-        print("Article saved as:", filename)
-
-        # Save metadata
-        with open("post_meta.json", "w") as f:
-            json.dump({"title": title, "summary": summary}, f)
-        print("Metadata saved.")
-        PYCODE
-
-        TITLE=$(jq -r .title post_meta.json)
-        SUMMARY=$(jq -r .summary post_meta.json)
-
-        if [ ! -f posts.json ]; then
-          echo "[]" > posts.json
-        fi
-
-        echo "Before update:"
-        cat posts.json
-
-        tmp=$(mktemp)
-        # Replace today's entry if it exists, then add new one
-        jq "map(select(.date != \"${TODAY}\")) + [{\"title\": \"$TITLE\", \"file\": \"$POST_FILE\", \"date\": \"$TODAY\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
-
-        echo "After update:"
-        cat posts.json
-
-    - name: Commit and push changes
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        git add posts/ posts.json
-        git commit -m "Add weekly blog post: $(date +'%Y-%m-%d')" || echo "No changes"
-        git push origin main
