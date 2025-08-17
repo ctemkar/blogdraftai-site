@@ -39,9 +39,9 @@ jobs:
         set -xe
         mkdir -p posts
         TODAY=$(date +'%Y-%m-%d')
-        POST_FILE="posts/post-${TODAY}.html"   # 👈 force HTML output
+        POST_FILE="posts/post-${TODAY}.html"
 
-        python - <<'PYCODE'
+        python - <<PYCODE
 import os, openai, datetime, json
 
 print("=== PYTHON SCRIPT START ===")
@@ -76,7 +76,7 @@ summary = meta.get("summary", "Auto-generated article.")
 print("Title:", title)
 print("Summary:", summary)
 
-# Step 2: Generate full article
+# Step 2: Generate article
 article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
 try:
     resp2 = openai.chat.completions.create(
@@ -90,7 +90,7 @@ except Exception as e:
     print("Error generating article:", e)
     article_text = "<p>Fallback: No article generated.</p>"
 
-# Save as HTML file (not .md!)
+# Save as HTML file
 html = f"""<!DOCTYPE html>
 <html>
 <head><title>{title}</title></head>
@@ -106,13 +106,12 @@ with open(filename, "w") as f:
     f.write(html)
 print("Article saved as:", filename)
 
-# Save metadata for bash to use
+# Save metadata
 with open("post_meta.json", "w") as f:
     json.dump({"title": title, "summary": summary}, f)
 print("Metadata saved.")
 PYCODE
 
-        # Extract title + summary from post_meta.json
         TITLE=$(jq -r .title post_meta.json)
         SUMMARY=$(jq -r .summary post_meta.json)
 
