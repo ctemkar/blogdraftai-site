@@ -1,0 +1,73 @@
+name: Auto-generate Blog Post
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"   # every Monday at 09:00 Bangkok (2AM UTC)
+  workflow_dispatch:
+
+jobs:
+  auto-post:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: pip install openai jq
+
+    - name: Generate article with OpenAI
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        mkdir -p posts
+        TODAY=$(date +'%Y-%m-%d')
+        POST_FILE="posts/article-${TODAY}.html"
+
+        # Call OpenAI to generate article text
+        ARTICLE_TEXT=$(python - <<'PYCODE'
+import os, openai, datetime
+openai.api_key = os.environ["OPENAI_API_KEY"]
+
+today = datetime.date.today().strftime("%A, %B %d, %Y")
+
+prompt = f"Write a 600-word blog article about a trending AI topic for {today}. Make it engaging and useful, with H2 subheadings."
+
+resp = openai.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": prompt}],
+    max_tokens=800,
+)
+
+content = resp.choices[0].message.content
+print(content)
+PYCODE
+)
+
+        # Save article into HTML file
+        echo "<!DOCTYPE html>
+        <html>
+        <head><title>Weekly Blog ${TODAY}</title></head>
+        <body>
+        <h1>Weekly Blog Post - ${TODAY}</h1>
+        <div>${ARTICLE_TEXT}</div>
+        </body></html>" > $POST_FILE
+
+        # Update posts.json
+        jq ". + [{\"title\": \"Weekly Blog Post - ${TODAY}\", \"file\": \"$POST_FILE\", \"date\": \"${TODAY}\", \"summary\": \"Auto-generated article.\"}]" posts.json > posts_tmp.json
+        mv posts_tmp.json posts.json
+
+    - name: Commit and push changes
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add posts/ posts.json
+        git commit -m "Auto-generated blog post $(date +'%Y-%m-%d')" || echo "No changes to commit"
+        git push origin main
