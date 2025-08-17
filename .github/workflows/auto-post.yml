@@ -1,5 +1,6 @@
 name: Auto-generate Blog Post
-
+permissions:
+  contents: write   # 👈 allow the workflow to push commits
 on:
   schedule:
     - cron: "0 2 * * 1"   # Monday 9AM Bangkok (2AM UTC)
