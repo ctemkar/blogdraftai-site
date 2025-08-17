@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BlogDraftAI - Latest Posts</title>
+    <title>BlogDraftAI - Debug Mode</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,6 +11,14 @@
             margin: 0 auto;
             padding: 20px;
             line-height: 1.6;
+        }
+        .debug {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
         }
         .post {
             border-bottom: 1px solid #eee;
@@ -37,44 +45,78 @@
             text-align: center;
             color: #666;
         }
+        .error {
+            color: red;
+            background: #ffe6e6;
+            padding: 10px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
-    <h1>BlogDraftAI - Latest Posts</h1>
+    <h1>BlogDraftAI - Debug Mode</h1>
+    
     <div id="loading">Loading posts...</div>
+    <div id="debug-info" class="debug"></div>
     <div id="posts"></div>
 
     <script>
+        const debugDiv = document.getElementById('debug-info');
+        const loadingDiv = document.getElementById('loading');
+        const postsDiv = document.getElementById('posts');
+
+        debugDiv.innerHTML = 'Attempting to fetch posts.json...\n';
+
         fetch('posts.json')
-            .then(response => response.json())
-            .then(posts => {
-                const container = document.getElementById('posts');
-                const loading = document.getElementById('loading');
+            .then(response => {
+                debugDiv.innerHTML += `Response status: ${response.status}\n`;
+                debugDiv.innerHTML += `Response headers: ${JSON.stringify([...response.headers.entries()])}\n`;
+                return response.text();
+            })
+            .then(text => {
+                debugDiv.innerHTML += `Raw response text: ${text}\n`;
+                debugDiv.innerHTML += `Text length: ${text.length}\n`;
                 
-                loading.style.display = 'none';
+                let posts;
+                try {
+                    posts = JSON.parse(text);
+                    debugDiv.innerHTML += `Parsed JSON successfully\n`;
+                    debugDiv.innerHTML += `Number of posts: ${posts.length}\n`;
+                    debugDiv.innerHTML += `Posts data: ${JSON.stringify(posts, null, 2)}\n`;
+                } catch (e) {
+                    debugDiv.innerHTML += `JSON parse error: ${e.message}\n`;
+                    postsDiv.innerHTML = '<div class="error">Error: Invalid JSON in posts.json</div>';
+                    loadingDiv.style.display = 'none';
+                    return;
+                }
+                
+                loadingDiv.style.display = 'none';
                 
                 if (posts.length === 0) {
-                    container.innerHTML = '<p>No posts available yet.</p>';
+                    postsDiv.innerHTML = '<p>No posts available yet. (posts.json is empty array)</p>';
                     return;
                 }
                 
                 // Sort posts by date (newest first)
                 posts.sort((a, b) => new Date(b.date) - new Date(a.date));
                 
-                posts.forEach(post => {
+                posts.forEach((post, index) => {
                     const div = document.createElement('div');
                     div.className = 'post';
                     div.innerHTML = `
                         <h2><a href="${post.file}">${post.title}</a></h2>
                         <p class="post-date">${post.date}</p>
                         <p class="post-summary">${post.summary}</p>
+                        <small>Debug: Post ${index + 1}, File: ${post.file}</small>
                     `;
-                    container.appendChild(div);
+                    postsDiv.appendChild(div);
                 });
             })
             .catch(err => {
                 console.error('Error loading posts:', err);
-                document.getElementById('loading').innerHTML = 'Error loading posts.';
+                debugDiv.innerHTML += `Fetch error: ${err.message}\n`;
+                postsDiv.innerHTML = '<div class="error">Error loading posts.json</div>';
+                loadingDiv.style.display = 'none';
             });
     </script>
 </body>
