@@ -5,7 +5,7 @@ permissions:
 
 on:
   schedule:
-    - cron: "0 2 * * 1"
+    - cron: "0 2 * * 1"   # Monday 9AM Bangkok (2AM UTC)
   workflow_dispatch:
     inputs:
       topic:
@@ -16,6 +16,7 @@ on:
 jobs:
   generate-blog:
     runs-on: ubuntu-latest
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -40,7 +41,8 @@ jobs:
         TODAY=$(date +'%Y-%m-%d')
         POST_FILE="posts/post-${TODAY}.html"
 
-        python - <<PYCODE
+        # Write Python script into a file
+        cat > generate_post.py <<'PYCODE'
 import os, openai, datetime, json
 
 api_key = os.environ.get("OPENAI_API_KEY")
@@ -70,7 +72,7 @@ except Exception as e:
 title = meta.get("title")
 summary = meta.get("summary")
 
-# Step 2: Generate article
+# Step 2: Article
 article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
 try:
     resp2 = openai.chat.completions.create(
@@ -83,7 +85,7 @@ except Exception as e:
     print("Article generation failed:", e)
     article_text = "<p>Fallback: No article generated.</p>"
 
-# Save HTML
+# Save as HTML
 html = f"""<!DOCTYPE html>
 <html>
 <head><title>{title}</title></head>
@@ -93,12 +95,16 @@ html = f"""<!DOCTYPE html>
 <div>{article_text}</div>
 </body></html>"""
 
+os.makedirs("posts", exist_ok=True)
 with open(f"posts/post-{today}.html", "w") as f:
     f.write(html)
 
 with open("post_meta.json", "w") as f:
     json.dump({"title": title, "summary": summary}, f)
 PYCODE
+
+        # Run the script
+        python generate_post.py
 
         TITLE=$(jq -r .title post_meta.json)
         SUMMARY=$(jq -r .summary post_meta.json)
@@ -108,7 +114,9 @@ PYCODE
         fi
 
         tmp=$(mktemp)
-        jq "map(select(.date != \"${TODAY}\")) + [{\"title\": \"$TITLE\", \"file\": \"$POST_FILE\", \"date\": \"$TODAY\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
+        jq "map(select(.date != \"${TODAY}\")) + \
+            [{\"title\": \"$TITLE\", \"file\": \"$POST_FILE\", \"date\": \"$TODAY\", \"summary\": \"$SUMMARY\"}]" \
+            posts.json > "$tmp" && mv "$tmp" posts.json
 
     - name: Commit and push changes
       run: |
