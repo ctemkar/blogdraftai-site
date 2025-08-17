@@ -119,4 +119,44 @@ jobs:
 
         if [ ! -f posts.json ]; then
           echo "[]" > posts.json
-        f
+        fi
+
+        # Create new entry safely
+        cat > new_entry.json << EOF
+        {
+          "title": $(echo "$TITLE" | jq -R .),
+          "file": "$POST_FILE",
+          "date": "$TODAY",
+          "summary": $(echo "$SUMMARY" | jq -R .)
+        }
+        EOF
+
+        # Update posts.json safely
+        tmp=$(mktemp)
+        jq "map(select(.date != \"$TODAY\")) + [$(cat new_entry.json)]" posts.json > "$tmp" && mv "$tmp" posts.json
+
+        echo "Updated posts.json:"
+        cat posts.json
+
+        echo "Files in posts directory:"
+        ls -la posts/
+
+    - name: Commit and push changes
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        
+        echo "Files before commit:"
+        ls -la posts/
+        
+        git add .
+        git status
+        
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Auto blog post $(date +'%Y-%m-%d')"
+          git push origin main
+          echo "Changes committed and pushed"
+        fi
+        
