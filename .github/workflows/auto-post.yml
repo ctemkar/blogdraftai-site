@@ -39,7 +39,7 @@ jobs:
         set -xe
         mkdir -p posts
         TODAY=$(date +'%Y-%m-%d')
-        POST_FILE="posts/post-${TODAY}.html"
+        POST_FILE="posts/post-${TODAY}.html"   # 👈 force HTML output
 
         python - <<'PYCODE'
 import os, openai, datetime, json
@@ -90,7 +90,7 @@ except Exception as e:
     print("Error generating article:", e)
     article_text = "<p>Fallback: No article generated.</p>"
 
-# Save as HTML file
+# Save as HTML file (not .md!)
 html = f"""<!DOCTYPE html>
 <html>
 <head><title>{title}</title></head>
