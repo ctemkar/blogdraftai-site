@@ -41,10 +41,13 @@ jobs:
             exit(1)
 
         openai.api_key = api_key
-        today = datetime.date.today().strftime("%A, %B %d, %Y")
+        today_date = datetime.date.today().strftime("%Y-%m-%d")
+        today_display = datetime.date.today().strftime("%A, %B %d, %Y")
         topic = os.getenv("INPUT_TOPIC", "trending AI topic")
 
-        meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for {topic} as of {today}. Respond in JSON with keys: title, summary."
+        print(f"Generating post for {today_display} (filename: {today_date})")
+
+        meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for {topic} as of {today_display}. Respond in JSON with keys: title, summary."
         try:
             resp = openai.chat.completions.create(
                 model="gpt-4o-mini",
@@ -54,14 +57,15 @@ jobs:
             )
             raw = resp.choices[0].message.content.strip()
             meta = json.loads(raw)
+            print(f"Generated meta: {meta}")
         except Exception as e:
             print("Meta generation failed:", e)
-            meta = {"title": f"Weekly Blog Post - {today}", "summary": "Fallback summary."}
+            meta = {"title": f"Weekly Blog Post - {today_display}", "summary": "Fallback summary."}
 
         title = meta.get("title")
         summary = meta.get("summary")
 
-        article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
+        article_prompt = f"Write a 600-word blog article titled '{title}' for {today_display}. Include H2 subheadings."
         try:
             resp2 = openai.chat.completions.create(
                 model="gpt-4o-mini",
@@ -69,6 +73,7 @@ jobs:
                 max_tokens=1000,
             )
             article_text = resp2.choices[0].message.content
+            print("Article generated successfully")
         except Exception as e:
             print("Article generation failed:", e)
             article_text = "<p>Fallback: No article generated.</p>"
@@ -83,11 +88,14 @@ jobs:
         </body></html>"""
 
         os.makedirs("posts", exist_ok=True)
-        with open(f"posts/post-{today}.html", "w") as f:
+        filename = f"posts/post-{today_date}.html"
+        with open(filename, "w") as f:
             f.write(html)
+        print(f"Article saved as: {filename}")
 
         with open("post_meta.json", "w") as f:
             json.dump({"title": title, "summary": summary}, f)
+        print("Metadata saved")
         EOF
 
     - name: Generate blog post and update posts.json
@@ -105,17 +113,10 @@ jobs:
         TITLE=$(jq -r .title post_meta.json)
         SUMMARY=$(jq -r .summary post_meta.json)
 
+        echo "Generated title: $TITLE"
+        echo "Generated summary: $SUMMARY"
+        echo "Post file: $POST_FILE"
+
         if [ ! -f posts.json ]; then
           echo "[]" > posts.json
-        fi
-
-        tmp=$(mktemp)
-        jq "map(select(.date != \"${TODAY}\")) + [{\"title\": \"$TITLE\", \"file\": \"$POST_FILE\", \"date\": \"$TODAY\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
-
-    - name: Commit and push changes
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-        git add posts/ posts.json
-        git commit -m "Auto blog post $(date +'%Y-%m-%d')" || echo "No changes"
-        git push origin main
+        f
