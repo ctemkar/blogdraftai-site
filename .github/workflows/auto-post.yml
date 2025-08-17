@@ -28,93 +28,68 @@ jobs:
     - name: Install dependencies
       run: pip install openai jq
 
-    - name: Debug - Check initial state
-      run: |
-        echo "=== INITIAL STATE ==="
-        echo "Current directory contents:"
-        ls -la
-        echo "Posts directory:"
-        ls -la posts/ 2>/dev/null || echo "Posts directory doesn't exist"
-        echo "Current posts.json:"
-        cat posts.json 2>/dev/null || echo "posts.json doesn't exist"
-
     - name: Generate article with OpenAI
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         INPUT_TOPIC: ${{ github.event.inputs.topic }}
       run: |
+        set -xe
         mkdir -p posts
         TODAY=$(date +'%Y-%m-%d')
         POST_FILE="posts/article-${TODAY}.html"
 
-        echo "=== GENERATING ARTICLE ==="
-        echo "Date: $TODAY"
-        echo "Topic: ${INPUT_TOPIC:-trending AI topic}"
+        echo "=== Running Python to generate content for $TODAY ==="
 
         python - <<'PYCODE'
 import os, openai, datetime, json
 print("=== PYTHON SCRIPT START ===")
 
-# Check API key
 api_key = os.environ.get("OPENAI_API_KEY")
 if not api_key:
-    print("ERROR: No OpenAI API key found!")
+    print("ERROR: No OpenAI API key found")
     exit(1)
 else:
-    print(f"API key found: {api_key[:10]}...")
+    print(f"API Key detected: {api_key[:6]}...")
 
 openai.api_key = api_key
-
 today = datetime.date.today().strftime("%A, %B %d, %Y")
 topic = os.getenv("INPUT_TOPIC", "trending AI topic")
 
-print(f"Today: {today}")
-print(f"Topic: {topic}")
-
 # Title + Summary
-meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for a {topic} as of {today}. Respond in JSON with keys: title, summary."
-print(f"Meta prompt: {meta_prompt}")
-
 try:
+    meta_prompt = f"Generate a catchy blog title and a 2-sentence summary for a {topic} as of {today}. Respond in JSON with keys: title, summary."
     resp = openai.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": meta_prompt}],
         max_tokens=200,
     )
-    print("OpenAI response received for meta")
-    raw_content = resp.choices[0].message.content.strip()
-    print(f"Raw meta response: {raw_content}")
-    
-    meta = json.loads(raw_content)
-    print(f"Parsed meta: {meta}")
+    raw = resp.choices[0].message.content.strip()
+    print("Raw meta response:", raw)
+    meta = json.loads(raw)
 except Exception as e:
-    print(f"Error with meta generation: {e}")
+    print("Meta generation failed:", e)
     meta = {"title": f"Weekly Blog Post - {today}", "summary": "Auto-generated article."}
 
-title = meta.get("title", f"Weekly Blog Post - {today}")
-summary = meta.get("summary", "Auto-generated article.")
+title = meta["title"]
+summary = meta["summary"]
+print("Title:", title)
+print("Summary:", summary)
 
-print(f"Final title: {title}")
-print(f"Final summary: {summary}")
-
-# Full Article
-article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
-print(f"Article prompt: {article_prompt}")
-
+# Article body
 try:
+    article_prompt = f"Write a 600-word blog article titled '{title}' for {today}. Include H2 subheadings."
     resp2 = openai.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": article_prompt}],
-        max_tokens=1200,
+        max_tokens=1000,
     )
-    print("OpenAI response received for article")
     article_text = resp2.choices[0].message.content
-    print(f"Article length: {len(article_text)} characters")
+    print("Generated article length:", len(article_text))
 except Exception as e:
-    print(f"Error with article generation: {e}")
-    article_text = f"<p>This is a test article about {topic} generated on {today}.</p>"
+    print("Article generation failed:", e)
+    article_text = "<p>Fallback: No article generated.</p>"
 
-# Save HTML file
+# Save HTML
 html = f"""<!DOCTYPE html>
 <html>
 <head><title>{title}</title></head>
@@ -128,52 +103,32 @@ os.makedirs("posts", exist_ok=True)
 filename = f"posts/article-{today}.html"
 with open(filename, "w") as f:
     f.write(html)
-print(f"HTML file saved: {filename}")
+print("Article file saved:", filename)
 
-# Save metadata for BASH
+# Metadata for bash
 with open("post_meta.json", "w") as f:
     json.dump({"title": title, "summary": summary}, f)
-print("Metadata saved to post_meta.json")
-
-print("=== PYTHON SCRIPT END ===")
+print("Saved meta.json")
 PYCODE
 
-        echo "=== AFTER PYTHON SCRIPT ==="
-        echo "Files created:"
+        echo "=== After Python ==="
         ls -la posts/
-        echo "Metadata file:"
         cat post_meta.json
 
         TITLE=$(jq -r .title post_meta.json)
         SUMMARY=$(jq -r .summary post_meta.json)
 
-        echo "Extracted title: $TITLE"
-        echo "Extracted summary: $SUMMARY"
-
-        # Ensure posts.json exists & is valid
         if [ ! -f posts.json ]; then
-          echo "Creating posts.json"
           echo "[]" > posts.json
         fi
 
-        echo "=== UPDATING POSTS.JSON ==="
-        echo "Before update:"
+        echo "=== Old posts.json ==="
         cat posts.json
 
         tmp=$(mktemp)
-        jq ". + [{\"title\": \"$TITLE\", \"file\": \"posts/article-${TODAY}.html\", \"date\": \"${TODAY}\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
+        jq ". + [{\"title\": \"$TITLE\", \"file\": \"$POST_FILE\", \"date\": \"$TODAY\", \"summary\": \"$SUMMARY\"}]" posts.json > "$tmp" && mv "$tmp" posts.json
 
-        echo "After update:"
-        cat posts.json
-
-    - name: Debug: Final state
-      run: |
-        echo "=== FINAL STATE ==="
-        echo "All files:"
-        find . -name "*.html" -o -name "*.json" | head -10
-        echo "Posts directory:"
-        ls -la posts/
-        echo "Final posts.json:"
+        echo "=== New posts.json ==="
         cat posts.json
 
     - name: Commit and push changes
@@ -181,6 +136,5 @@ PYCODE
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git add posts/ posts.json
-        git status
-        git commit -m "Auto-generated blog post $(date +'%Y-%m-%d')" || echo "No changes to commit"
+        git commit -m "Auto-generated blog post $(date +'%Y-%m-%d')" || echo "No changes"
         git push origin main
